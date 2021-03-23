@@ -1,7 +1,7 @@
 import React from 'react';
 import {
-    View, TextInput, StyleSheet,
-    Button, ActivityIndicator
+    View, TextInput, StyleSheet, Button, ActivityIndicator,
+    Text, Alert
 } from 'react-native';
 import FormRow from '../components/FormRow';
 import firebase from 'firebase'
@@ -14,6 +14,7 @@ export default class LoginPage extends React.Component {
             email: '',
             password: '',
             isLoading: false,
+            message: ''
         }
     }
 
@@ -39,20 +40,67 @@ export default class LoginPage extends React.Component {
     }
 
     tryLogin() {
-        this.setState({ isLoading: true });
+        this.setState({ isLoading: true, message: '' });
         const { email, password } = this.state;
+        const loginUserSuccess = user => {
+            this.setState({ message: "Sucesso" });
+        }
+        const loginUserFailed = error => {
+            this.setState({ message: this.getMessageByErrorCode(error.code) })
+        }
         firebase
             .auth()
             .signInWithEmailAndPassword(email, password)
             .then((user) => {
-                console.log('Autenticado ', user)
+                loginUserSuccess(user)
             })
             .catch((error) => {
-                console.log('Erro Login ', error)
+                if (error.code === 'auth/user-not-found') {
+                    Alert.alert('Usuário não encontrado', 'Deseja criar um cadastro com as informções inseridas?',
+                        [{
+                            text: 'Não',
+                            onPress: () => {
+                                console.log('Usuário não criado');
+                            }
+                        }, {
+                            text: 'Sim',
+                            onPress: () => {
+                                firebase.auth()
+                                    .createUserWithEmailAndPassword(email, password)
+                                    .then((user) => { loginUserSuccess(user) })
+                                    .catch((error) => { loginUserFailed(error) })
+                            }
+                        }], { cancelable: false })
+                    return;
+                }
+                loginUserFailed(error);
             }).then(() => {
                 this.setState({ isLoading: false });
             });
 
+    }
+
+    getMessageByErrorCode(errorCode) {
+        switch (errorCode) {
+            case 'auth/wrong-password':
+                return 'Senha Incorreta';
+            case 'auth/user-not-found':
+                return 'Usuário não encontrado';
+            case 'auth/weak-password':
+                return 'Senha Fraca';
+            default:
+                return 'Erro desconhecido';
+        }
+    }
+
+    renderMessage() {
+        const { message } = this.state;
+        if (!message) {
+            return null;
+        }
+        return (<View>
+            <Text>{message}</Text>
+        </View>);
     }
 
     renderButton() {
@@ -79,6 +127,7 @@ export default class LoginPage extends React.Component {
                         onChangeText={value => this.onChangeHandlerInput('password', value)} />
                 </FormRow>
                 {this.renderButton()}
+                {this.renderMessage()}
             </View>);
     }
 }
